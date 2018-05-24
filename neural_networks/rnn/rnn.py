@@ -60,54 +60,54 @@ class RNNNumpy:
 		return self.calculate_loss_value(x, y) / N
 
 
-        # This is the complicated piece in the whole neural network process
-        # For reference, my notebook and this articl https://github.com/go2carter/nn-learn/blob/master/grad-deriv-tex/rnn-grad-deriv.pdf
-        def bptt(self, x, y):
-            T = len(y)
-            o, s = self.forward_propogation(x)
-            dLdU = np.zeros(self.U.shape)
-            dLdV = np.zeros(self.V.shape)
-            dLdW = np.zeros(self.W.shape)
-            delta_o = o
-            delta_o[np.arange(len(y)), y] -= 1
-            for t in np.arange(T)[::-1]:
-                dLdV += np.outer(delta_o[t], s[t].T)
-                delta_t = self.V.T.dot(delta_o[t]) * (1 - (s[t] ** 2))
-                for bptt_step in np.arange(max(0, t - self.bptt_truncate), t+1)[::-1]:
-                    dLdW += np.outer(delta_t, s[bptt_step - 1])
-                    dLdU[:, x[bptt_step]] += delta_t
-                    delta_t = self.V.T.dot(delta_o[t]) * (1 - (s[bptt_step-1] ** 2))
-            return [dLdU, dLdV, dLdW]
+    # This is the complicated piece in the whole neural network process
+    # For reference, my notebook and this articl https://github.com/go2carter/nn-learn/blob/master/grad-deriv-tex/rnn-grad-deriv.pdf
+    def bptt(self, x, y):
+        T = len(y)
+        o, s = self.forward_propogation(x)
+        dLdU = np.zeros(self.U.shape)
+        dLdV = np.zeros(self.V.shape)
+        dLdW = np.zeros(self.W.shape)
+        delta_o = o
+        delta_o[np.arange(len(y)), y] -= 1
+        for t in np.arange(T)[::-1]:
+            dLdV += np.outer(delta_o[t], s[t].T)
+            delta_t = self.V.T.dot(delta_o[t]) * (1 - (s[t] ** 2))
+            for bptt_step in np.arange(max(0, t - self.bptt_truncate), t+1)[::-1]:
+                dLdW += np.outer(delta_t, s[bptt_step - 1])
+                dLdU[:, x[bptt_step]] += delta_t
+                delta_t = self.V.T.dot(delta_o[t]) * (1 - (s[bptt_step-1] ** 2))
+        return [dLdU, dLdV, dLdW]
 
 
-        def gradient_check(self, x, y, h=0.001, error_threshold=0.01):
-            bptt_gradients = self.bptt(x, y)
-            model_parameters = ['U', 'V', 'W']
-            for pidx, pname in enumerate(model_parameters):
-                parameter = operator.attrgetter(pname)(self)
-                print "Performing gradient check for parameter %s with size %d." %(pname, np.prod(parameter.shape))
-                it = np.nditer(parameter, flags=['multi_index'], op_flags=['readwrite'])
-                while not it.finished:
-                    ix = it.multi_index
-                    original_value = parameter[ix]
-                    parameter[ix] = original_value + h
-                    gradplus = self.calculate_loss_value([x], [y])
-                    parameter[ix] = original_value - h
-                    gradminus = self.calculate_loss_value([x], [y])
-                    estimated_gradient = (gradplus - gradminus) / (2 * h)
-                    parameter[ix] = original_value
-                    backprop_gradient = bptt_gradients[pidx][ix]
-                    relative_error = np.abs(backprop_gradient - estimated_gradient) / (np.abs(backprop_gradient) + np.abs(estimated_gradient))
-                    if relative_error >= error_threshold:
-                        print "Gradient check Error: parameter=%s ix=%s" %(pname, ix)
-                        print "+h loss: %f" %gradplus
-                        print "-h loss: %f" %gradminus
-                        print "Estimated gradient: %f" %estimated_gradient
-                        print "Backpropogation gradient: %f" %backprop_gradient
-                        print "Relative error: %f" %relative_error
-                        return
-                    it = it.iternext
-                print "gradient check for parameter %s passed." %(pname)
+    def gradient_check(self, x, y, h=0.001, error_threshold=0.01):
+        bptt_gradients = self.bptt(x, y)
+        model_parameters = ['U', 'V', 'W']
+        for pidx, pname in enumerate(model_parameters):
+            parameter = operator.attrgetter(pname)(self)
+            print "Performing gradient check for parameter %s with size %d." %(pname, np.prod(parameter.shape))
+            it = np.nditer(parameter, flags=['multi_index'], op_flags=['readwrite'])
+            while not it.finished:
+                ix = it.multi_index
+                original_value = parameter[ix]
+                parameter[ix] = original_value + h
+                gradplus = self.calculate_loss_value([x], [y])
+                parameter[ix] = original_value - h
+                gradminus = self.calculate_loss_value([x], [y])
+                estimated_gradient = (gradplus - gradminus) / (2 * h)
+                parameter[ix] = original_value
+                backprop_gradient = bptt_gradients[pidx][ix]
+                relative_error = np.abs(backprop_gradient - estimated_gradient) / (np.abs(backprop_gradient) + np.abs(estimated_gradient))
+                if relative_error >= error_threshold:
+                    print "Gradient check Error: parameter=%s ix=%s" %(pname, ix)
+                    print "+h loss: %f" %gradplus
+                    print "-h loss: %f" %gradminus
+                    print "Estimated gradient: %f" %estimated_gradient
+                    print "Backpropogation gradient: %f" %backprop_gradient
+                    print "Relative error: %f" %relative_error
+                    return
+                it = it.iternext
+            print "gradient check for parameter %s passed." %(pname)
 
 
         def numpy_sgd_step(self, x, y, learning_rate):
